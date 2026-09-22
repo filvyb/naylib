@@ -54,6 +54,7 @@ after install:
 
 task test, "Runs the test suite":
   localInstallTask()
+  exec "nim c -r tests/raylib_60.nim"
   exec "nim c -d:release tests/basic_window.nim"
   when defined(linux):
     exec "nim c -d:release -d:wayland tests/basic_window.nim"

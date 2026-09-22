@@ -115,6 +115,7 @@ proc processAliases(ctx: var ApiContext, config: ConfigData) =
   # Execute the processing stages in order
   for alias in mitems(ctx.api.aliases):
     processAliasFlags(alias, config)
+    updateType(alias.`type`, alias.name, "", ptPtr, config)
 
 proc processStructFlags(obj: var StructInfo, config: ConfigData) =
   if shouldMarkAsComplete(obj.name, config):

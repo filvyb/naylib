@@ -12,7 +12,7 @@
 {.passC: "-DEXTERNAL_CONFIG_FLAGS".}
 
 # Module selection - Some modules could be avoided
-# Mandatory modules: rcore, rlgl, utils
+# Mandatory modules: rcore, rlgl
 const NaylibSupportModuleRshapes {.booldefine.} = true
 when NaylibSupportModuleRshapes:
   {.passC: "-DSUPPORT_MODULE_RSHAPES=1".}
@@ -117,9 +117,9 @@ when NaylibRlShowGlDetailsInfo:
   {.passC: "-DRLGL_SHOW_GL_DETAILS_INFO=1".}
 
 # GPU skinning support
-const NaylibRlSupportMeshGpuSkinning {.booldefine.} = true
+const NaylibRlSupportMeshGpuSkinning* {.booldefine.} = true
 when NaylibRlSupportMeshGpuSkinning:
-  {.passC: "-DRL_SUPPORT_MESH_GPU_SKINNING=1".}
+  {.passC: "-DSUPPORT_GPU_SKINNING=1".}
 
 # ----------------------------------------------------------------------------------------
 # Module: rshapes - Configuration Flags

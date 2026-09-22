@@ -16,7 +16,8 @@ nimbledeps/
 .venv
 
 # Raylib source
-raylib/
+/raylib/
+src/raylib/*-client-protocol*.h
 
 # Compiled tools
 tools/mangler/naylib_mangler
@@ -25,4 +26,3 @@ tools/wrapper/naylib_wrapper
 
 # Configuration
 nim.cfg
-

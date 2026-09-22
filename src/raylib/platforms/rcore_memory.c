@@ -1,33 +1,30 @@
 /**********************************************************************************************
 *
-*   rcore_<platform> template - Functions to manage window, graphics device and inputs
+*   rcore_memory - Functions to manage window, graphics device and inputs
 *
-*   PLATFORM: <PLATFORM>
-*       - TODO: Define the target platform for the core
+*   PLATFORM: MEMORY (No OS)
+*       - Memory framebuffer output (no os)
 *
 *   LIMITATIONS:
-*       - Limitation 01
-*       - Limitation 02
+*       - Software renderer (rlsw)
+*       - No input system
 *
 *   POSSIBLE IMPROVEMENTS:
 *       - Improvement 01
 *       - Improvement 02
-*
-*   ADDITIONAL NOTES:
-*       - TRACELOG() function is located in raylib [utils] module
 *
 *   CONFIGURATION:
 *       #define RCORE_PLATFORM_CUSTOM_FLAG
 *           Custom flag for rcore on target platform -not used-
 *
 *   DEPENDENCIES:
-*       - <platform-specific SDK dependency>
+*       - rlsw: Software renderer
 *       - gestures: Gestures system for touch-ready devices (or simulated from mouse inputs)
 *
 *
 *   LICENSE: zlib/libpng
 *
-*   Copyright (c) 2013-2026 Ramon Santamaria (@raysan5) and contributors
+*   Copyright (c) 2025-2026 Ramon Santamaria (@raysan5) and contributors
 *
 *   This software is provided "as-is", without any express or implied warranty. In no event
 *   will the authors be held liable for any damages arising from the use of this software.
@@ -46,14 +43,30 @@
 *
 **********************************************************************************************/
 
-// TODO: Include the platform specific libraries
+#if defined(_WIN32)
+    #include <conio.h>              // Required for: kbhit()
+#else
+    // Provide kbhit() function in non-Windows platforms
+    #include <termios.h>
+    #include <unistd.h>
+    #include <fcntl.h>
+#endif
 
 //----------------------------------------------------------------------------------
 // Types and Structures Definition
 //----------------------------------------------------------------------------------
-typedef struct {
-    // TODO: Define the platform specific variables required
+// Platform-specific required data for timing (Win32)
+#if defined(_WIN32)
+typedef struct _LARGE_INTEGER { int64_t QuadPart; } LARGE_INTEGER;
+__declspec(dllimport) int __stdcall QueryPerformanceCounter(LARGE_INTEGER *lpPerformanceCount);
+__declspec(dllimport) int __stdcall QueryPerformanceFrequency(LARGE_INTEGER *lpFrequency);
+#endif
 
+typedef struct {
+    unsigned int *pixels;   // Pointer to pixel data buffer (RGBA8888 format)
+#if defined(_WIN32)
+    LARGE_INTEGER timerFrequency;
+#endif
 } PlatformData;
 
 //----------------------------------------------------------------------------------
@@ -66,13 +79,21 @@ static PlatformData platform = { 0 };   // Platform specific data
 //----------------------------------------------------------------------------------
 // Module Internal Functions Declaration
 //----------------------------------------------------------------------------------
-int InitPlatform(void);          // Initialize platform (graphics, inputs and more)
-bool InitGraphicsDevice(void);   // Initialize graphics device
+int InitPlatform(void);                 // Initialize platform (graphics, inputs and more)
+bool InitGraphicsDevice(void);          // Initialize graphics device
 
 //----------------------------------------------------------------------------------
 // Module Functions Declaration
 //----------------------------------------------------------------------------------
 // NOTE: Functions declaration is provided by raylib.h
+
+//----------------------------------------------------------------------------------
+// Module Internal Functions Declaration
+//----------------------------------------------------------------------------------
+#if !defined(_WIN32)
+static int kbhit(void);                         // Check if a key has been pressed
+static char getch(void) { return getchar(); }   // Get pressed character
+#endif
 
 //----------------------------------------------------------------------------------
 // Module Functions Definition: Window and Graphics Device
@@ -330,7 +351,8 @@ void DisableCursor(void)
 // Swap back buffer with front buffer (screen drawing)
 void SwapScreenBuffer(void)
 {
-    eglSwapBuffers(platform.device, platform.surface);
+    // Update framebuffer
+    rlCopyFramebuffer(0, 0, CORE.Window.render.width, CORE.Window.render.height, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, platform.pixels);
 }
 
 //----------------------------------------------------------------------------------
@@ -341,11 +363,16 @@ void SwapScreenBuffer(void)
 double GetTime(void)
 {
     double time = 0.0;
+#if defined(_WIN32)
+    LARGE_INTEGER now = { 0 };
+    QueryPerformanceCounter(&now);
+    return (double)(now.QuadPart - CORE.Time.base)/(double)platform.timerFrequency.QuadPart;
+#elif defined(__linux__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__EMSCRIPTEN__)
     struct timespec ts = { 0 };
     clock_gettime(CLOCK_MONOTONIC, &ts);
     unsigned long long int nanoSeconds = (unsigned long long int)ts.tv_sec*1000000000LLU + (unsigned long long int)ts.tv_nsec;
     time = (double)(nanoSeconds - CORE.Time.base)*1e-9;  // Elapsed time since InitTimer()
-
+#endif
     return time;
 }
 
@@ -353,14 +380,18 @@ double GetTime(void)
 // NOTE: This function is only safe to use if you control the URL given.
 // A user could craft a malicious string performing another action.
 // Only call this function yourself not with user input or make sure to check the string yourself.
-// Ref: https://github.com/raysan5/raylib/issues/686
+// REF: https://github.com/raysan5/raylib/issues/686
 void OpenURL(const char *url)
 {
     // Security check to (partially) avoid malicious code on target platform
     if (strchr(url, '\'') != NULL) TRACELOG(LOG_WARNING, "SYSTEM: Provided URL could be potentially malicious, avoid [\'] character");
     else
     {
-        // TODO: Load url using default browser
+        char *cmd = (char *)RL_CALLOC(strlen(url) + 32, sizeof(char));
+        sprintf(cmd, "explorer \"%s\"", url);
+        int result = system(cmd);
+        if (result == -1) TRACELOG(LOG_WARNING, "OpenURL() child process could not be created");
+        RL_FREE(cmd);
     }
 }
 
@@ -394,7 +425,7 @@ void SetMouseCursor(int cursor)
     TRACELOG(LOG_WARNING, "SetMouseCursor() not implemented on target platform");
 }
 
-// Get physical key name.
+// Get physical key name
 const char *GetKeyName(int key)
 {
     TRACELOG(LOG_WARNING, "GetKeyName() not implemented on target platform");
@@ -438,6 +469,13 @@ void PollInputEvents(void)
     }
 
     // TODO: Poll input events for current platform
+
+    // Check for key pressed to exit
+    if (kbhit())
+    {
+        int key = getch();
+        if (key == 27) CORE.Window.shouldClose = true; // KEY_SCAPE
+    }
 }
 
 //----------------------------------------------------------------------------------
@@ -447,38 +485,17 @@ void PollInputEvents(void)
 // Initialize platform: graphics, inputs and more
 int InitPlatform(void)
 {
-    // TODO: Initialize graphic device: display/window
-    // It usually requires setting up the platform display system configuration
-    // and connexion with the GPU through some system graphic API
-    // raylib uses OpenGL so, platform should create that kind of connection
-    // Below example illustrates that process using EGL library
-    //----------------------------------------------------------------------------
-    FLAG_SET(CORE.Window.flags, FLAG_FULLSCREEN_MODE);
-
-    if (FLAG_IS_SET(CORE.Window.flags, FLAG_MSAA_4X_HINT))
+    // Memory framebuffer can only work with software renderer
+    if (rlGetVersion() != RL_OPENGL_SOFTWARE)
     {
-        // TODO: Enable MSAA
-
-        TRACELOG(LOG_INFO, "DISPLAY: Trying to enable MSAA x4");
-    }
-
-    // TODO: Init display and graphic device
-
-    // TODO: Check display, device and context activation
-    bool result = true;
-    if (result)
-    {
-        CORE.Window.ready = true;
-
-        CORE.Window.render.width = CORE.Window.screen.width;
-        CORE.Window.render.height = CORE.Window.screen.height;
-        CORE.Window.currentFbo.width = CORE.Window.render.width;
-        CORE.Window.currentFbo.height = CORE.Window.render.height;
+        TRACELOG(LOG_WARNING, "DISPLAY: Memory platform requires software renderer (GRAPHICS_API_OPENGL_SOFTWARE)");
+        TRACELOG(LOG_FATAL, "PLATFORM: Failed to initialize graphics device");
+        return -1;
     }
     else
     {
-        TRACELOG(LOG_FATAL, "PLATFORM: Failed to initialize graphics device");
-        return -1;
+        // Load memory framebuffer with desired screen size
+        platform.pixels = (unsigned int *)RL_CALLOC(CORE.Window.screen.width*CORE.Window.screen.height, sizeof(int));
     }
     //----------------------------------------------------------------------------
 
@@ -488,17 +505,18 @@ int InitPlatform(void)
     CORE.Window.currentFbo.width = CORE.Window.render.width;
     CORE.Window.currentFbo.height = CORE.Window.render.height;
 
-    TRACELOG(LOG_INFO, "DISPLAY: Device initialized successfully %s",
-        FLAG_IS_SET(CORE.Window.flags, FLAG_WINDOW_HIGHDPI)? "(HighDPI)" : "");
+    TRACELOG(LOG_INFO, "DISPLAY: Device initialized successfully");
     TRACELOG(LOG_INFO, "    > Display size: %i x %i", CORE.Window.display.width, CORE.Window.display.height);
     TRACELOG(LOG_INFO, "    > Screen size:  %i x %i", CORE.Window.screen.width, CORE.Window.screen.height);
     TRACELOG(LOG_INFO, "    > Render size:  %i x %i", CORE.Window.render.width, CORE.Window.render.height);
     TRACELOG(LOG_INFO, "    > Viewport offsets: %i, %i", CORE.Window.renderOffset.x, CORE.Window.renderOffset.y);
 
+    CORE.Window.ready = true;
+
     // TODO: Load OpenGL extensions
     // NOTE: GL procedures address loader is required to load extensions
     //----------------------------------------------------------------------------
-    rlLoadExtensions(eglGetProcAddress);
+    // ...
     //----------------------------------------------------------------------------
 
     // TODO: Initialize input events system
@@ -509,17 +527,23 @@ int InitPlatform(void)
     // ...
     //----------------------------------------------------------------------------
 
-    // TODO: Initialize timing system
+    // Initialize timing system
     //----------------------------------------------------------------------------
+#if defined(_WIN32)
+    LARGE_INTEGER time = { 0 };
+    QueryPerformanceCounter(&time);
+    QueryPerformanceFrequency(&platform.timerFrequency);
+    CORE.Time.base = time.QuadPart;
+#endif
     InitTimer();
     //----------------------------------------------------------------------------
 
-    // TODO: Initialize storage system
+    // Initialize storage system
     //----------------------------------------------------------------------------
     CORE.Storage.basePath = GetWorkingDirectory();
     //----------------------------------------------------------------------------
 
-    TRACELOG(LOG_INFO, "PLATFORM: CUSTOM: Initialized successfully");
+    TRACELOG(LOG_INFO, "PLATFORM: MEMORY: Initialized successfully");
 
     return 0;
 }
@@ -527,7 +551,41 @@ int InitPlatform(void)
 // Close platform
 void ClosePlatform(void)
 {
-    // TODO: De-initialize graphics, inputs and more
+    RL_FREE(platform.pixels);
 }
+
+//----------------------------------------------------------------------------------
+// Module Internal Functions Definition
+//----------------------------------------------------------------------------------
+#if !defined(_WIN32)
+// Check if a key has been pressed
+static int kbhit(void)
+{
+    struct termios oldt = { 0 };
+    struct termios newt = { 0 };
+    int ch = 0;
+    int oldf = 0;
+
+    tcgetattr(STDIN_FILENO, &oldt);
+    newt = oldt;
+    newt.c_lflag &= ~(ICANON | ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+    oldf = fcntl(STDIN_FILENO, F_GETFL, 0);
+    fcntl(STDIN_FILENO, F_SETFL, oldf | O_NONBLOCK);
+
+    ch = getchar();
+
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+    fcntl(STDIN_FILENO, F_SETFL, oldf);
+
+    if (ch != EOF)
+    {
+        ungetc(ch, stdin);
+        return 1;
+    }
+
+    return 0;
+}
+#endif
 
 // EOF

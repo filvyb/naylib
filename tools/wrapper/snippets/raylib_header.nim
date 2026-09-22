@@ -3,7 +3,6 @@ from std/unicode import Rune
 from std/syncio import writeFile
 import std/[assertions, paths]
 import naylib/private/config
-const raylibDir = currentSourcePath().Path.parentDir / Path"raylib"
 
 when defined(mingw):
   import std/private/globs
@@ -11,6 +10,8 @@ when defined(mingw):
   func `/`(head, tail: Path): Path {.inline.} =
     joinPath(head.string, tail.string).nativeToUnixPath.Path
   {.passC: "-I/usr/x86_64-w64-mingw32/include".}
+
+const raylibDir = currentSourcePath().Path.parentDir / Path"raylib"
 
 {.passC: "-I" & raylibDir.string.}
 {.passC: "-I" & string(raylibDir / Path"external/glfw/include").}
@@ -133,9 +134,9 @@ when defined(android):
   {.compile: AndroidNdk.Path / Path"sources/android/native_app_glue/android_native_app_glue.c".}
 
 const
-  RaylibVersion* = (5, 5, 0)
+  RaylibVersion* = (6, 0, 0)
 
   # Taken from raylib/src/config.h
   MaxShaderLocations* = 32 ## Maximum number of shader locations supported
   MaxMaterialMaps* = 12 ## Maximum number of shader maps supported
-  MaxMeshVertexBuffers* = 9 ## Maximum vertex buffers (VBO) per mesh
+  MaxMeshVertexBuffers* = (if NaylibRlSupportMeshGpuSkinning: 9 else: 7) ## Maximum vertex buffers (VBO) per mesh

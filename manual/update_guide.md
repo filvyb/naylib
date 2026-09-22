@@ -13,7 +13,12 @@ This guide describes the process of updating the bundled raylib version and rege
    ```
    This fetches the specified raylib version in `raylib/` (a git repository tracking raysan5/raylib) and copies the sources to `src/raylib/`
 
+   The update task also applies `tools/parser/raylib_parser.patch` to the upstream
+   parser. This fixes pointer typedefs and escaping quoted API descriptions in
+   raylib 6.0. Review or refresh the patch when updating to another release.
+
 3. Build the parser, mangler and wrapper tools:
+   Install the development dependency first with `nimble install eminim@2.8.2`.
    ```bash
    nim buildTools update_bindings.nims
    ```
@@ -69,4 +74,3 @@ nim docs update_bindings.nims
    ```
 
 2. Check for any compiler warnings or errors
-

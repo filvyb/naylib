@@ -468,3 +468,9 @@ template vrStereoMode*(config: VrStereoConfig; body: untyped) =
     body
   finally:
     endVrStereoMode()
+
+proc measureTextCodepoints*(font: Font; codepoints: openArray[Rune]; fontSize,
+    spacing: float32): Vector2 =
+  ## Measure text from Unicode codepoints using a font.
+  measureTextCodepointsImpl(font, cast[ptr UncheckedArray[int32]](codepoints),
+      codepoints.len.int32, fontSize, spacing)

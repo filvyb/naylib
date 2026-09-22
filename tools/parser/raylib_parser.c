@@ -9,10 +9,10 @@
      - struct AliasInfo
      - struct EnumInfo
      - struct FunctionInfo
-     
+
     WARNING: This parser is specifically designed to work with raylib.h, and has some contraints
     in that regards. Still, it can also work with other header files that follow same file structure
-    conventions as raylib.h: rlgl.h, raymath.h, raygui.h, reasings.h 
+    conventions as raylib.h: rlgl.h, raymath.h, raygui.h, reasings.h
 
     CONSTRAINTS:
     This parser is specifically designed to work with raylib.h, so, it has some constraints:
@@ -783,6 +783,10 @@ int main(int argc, char *argv[])
         // Skip space
         c++;
 
+        // Pointer declarators belong to the alias type, not its name.
+        if (linePtr[c] == '*') aliases[i].type[typeLen++] = ' ';
+        while (linePtr[c] == '*') aliases[i].type[typeLen++] = linePtr[c++];
+
         // Name
         int nameStart = c;
         while(linePtr[c] != ';') c++;
@@ -1392,22 +1396,22 @@ static void MemoryCopy(void *dest, const void *src, unsigned int count)
     for (unsigned int i = 0; i < count; i++) destPtr[i] = srcPtr[i];
 }
 
-// Escape backslashes in a string, writing the escaped string into a static buffer
+// Escape JSON/Lua string contents, including quotes in API descriptions.
 static char *EscapeBackslashes(char *text)
 {
-    static char buffer[256] = { 0 };
+    static char buffer[1024] = { 0 };
 
     int count = 0;
 
-    for (int i = 0; (text[i] != '\0') && (i < 255); i++, count++)
+    for (int i = 0; (text[i] != '\0') && (count < (int)sizeof(buffer) - 2); i++)
     {
-        buffer[count] = text[i];
-
-        if (text[i] == '\\')
+        if ((text[i] == '\\') || (text[i] == '"')) buffer[count++] = '\\';
+        if ((text[i] == '\n') || (text[i] == '\r') || (text[i] == '\t'))
         {
-            buffer[count + 1] = '\\';
-            count++;
+            buffer[count++] = '\\';
+            buffer[count++] = (text[i] == '\n')? 'n' : ((text[i] == '\r')? 'r' : 't');
         }
+        else buffer[count++] = text[i];
     }
 
     buffer[count] = '\0';

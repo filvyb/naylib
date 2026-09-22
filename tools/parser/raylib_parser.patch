@@ -1,0 +1,47 @@
+--- a/raylib_parser.c
++++ b/raylib_parser.c
+@@ -783,6 +783,10 @@
+         // Skip space
+         c++;
+ 
++        // Pointer declarators belong to the alias type, not its name.
++        if (linePtr[c] == '*') aliases[i].type[typeLen++] = ' ';
++        while (linePtr[c] == '*') aliases[i].type[typeLen++] = linePtr[c++];
++
+         // Name
+         int nameStart = c;
+         while(linePtr[c] != ';') c++;
+@@ -1392,22 +1396,22 @@
+     for (unsigned int i = 0; i < count; i++) destPtr[i] = srcPtr[i];
+ }
+ 
+-// Escape backslashes in a string, writing the escaped string into a static buffer
++// Escape JSON/Lua string contents, including quotes in API descriptions.
+ static char *EscapeBackslashes(char *text)
+ {
+-    static char buffer[256] = { 0 };
++    static char buffer[1024] = { 0 };
+ 
+     int count = 0;
+ 
+-    for (int i = 0; (text[i] != '\0') && (i < 255); i++, count++)
+-    {
+-        buffer[count] = text[i];
+-
+-        if (text[i] == '\\')
+-        {
+-            buffer[count + 1] = '\\';
+-            count++;
+-        }
++    for (int i = 0; (text[i] != '\0') && (count < (int)sizeof(buffer) - 2); i++)
++    {
++        if ((text[i] == '\\') || (text[i] == '"')) buffer[count++] = '\\';
++        if ((text[i] == '\n') || (text[i] == '\r') || (text[i] == '\t'))
++        {
++            buffer[count++] = '\\';
++            buffer[count++] = (text[i] == '\n')? 'n' : ((text[i] == '\r')? 'r' : 't');
++        }
++        else buffer[count++] = text[i];
+     }
+ 
+     buffer[count] = '\0';
